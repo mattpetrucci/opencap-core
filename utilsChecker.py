@@ -192,27 +192,23 @@ def calcIntrinsics(folderName, CheckerBoardParams=None, filenames=['*.jpg'],
     return CamParams
 
 # %%
-def computeAverageIntrinsics(session_path,trialIDs,CheckerBoardParams,nImages=25,cameraModel= None,videoType=".mov"):
+def computeAverageIntrinsics(session_path,trialIDs,CheckerBoardParams,nImages=25):
     CamParamList = []
     camModels = []
-    trial_name = ''
     
     for trial_id in trialIDs:
-        if cameraModel is None:
-            resp = requests.get(API_URL + "trials/{}/".format(trial_id),
-                              headers = {"Authorization": "Token {}".format(API_TOKEN)})
-            trial = resp.json()
-            camModels.append(trial['videos'][0]['parameters']['model'])
-            trial_name = trial['name']
-        else:
-            camModels.append(cameraModel)
-        if trial_name == '':
+        resp = requests.get(API_URL + "trials/{}/".format(trial_id),
+                         headers = {"Authorization": "Token {}".format(API_TOKEN)})
+        trial = resp.json()
+        camModels.append(trial['videos'][0]['parameters']['model'])
+        trial_name = trial['name']
+        if trial_name == 'null':
             trial_name = trial_id
         
         # Make directory (folder for trialname, intrinsics also saved there)
         video_dir = os.path.join(session_path,trial_name)
         os.makedirs(video_dir, exist_ok=True)
-        video_path = os.path.join(video_dir,trial_name + videoType)
+        video_path = os.path.join(video_dir,trial_name + ".mov")
         
         # Download video if not done
         if not os.path.exists(video_path):
@@ -877,7 +873,7 @@ def synchronizeVideos(CameraDirectories, trialRelativePath, pathPoseDetector,
 # %%
 def synchronizeVideoKeypoints(keypointList, confidenceList,
                               confidenceThreshold=0.3, 
-                              filtFreqs = {'gait':12,'default':30},
+                              filtFreqs = {'gait':12,'default':500},
                               sampleFreq=30, visualize=False, maxShiftSteps=30,
                               isGait=False, CameraParams = None,
                               cameras2Use=['none'],CameraDirectories = None,
@@ -1854,7 +1850,7 @@ def filterKeypointsButterworth(key2D,filtFreq,sampleFreq,order=4):
     key2D_out = np.copy(key2D)
     wn = filtFreq/(sampleFreq/2)
     if wn>1:
-        print('You tried to filter ' + str(sampleFreq) + ' signal with cutoff freq of ' + str(filtFreq) + ', which is above the Nyquist Frequency. Will filter at ' + str(sampleFreq/2) + 'instead.')
+        print('You tried to filter ' + str(int(sampleFreq)) + ' Hz signal with cutoff freq of ' + str(int(filtFreq)) + '. Will filter at ' + str(int(sampleFreq/2)) + ' instead.')
         wn=0.99
     elif wn==1:
         wn=0.99
