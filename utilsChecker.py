@@ -1,6 +1,7 @@
 import sys
 sys.path.append("./mmpose") # utilities in child directory
 import cv2 
+import csv
 import numpy as np 
 import os 
 import glob 
@@ -190,7 +191,6 @@ def calcIntrinsics(folderName, CheckerBoardParams=None, filenames=['*.jpg'],
         saveCameraParameters(saveFileName,CamParams)
   
     return CamParams
-
 # %%
 def computeAverageIntrinsics(session_path,trialIDs,CheckerBoardParams,nImages=25):
     CamParamList = []
@@ -344,8 +344,8 @@ def rotateIntrinsics(CamParams,videoPath):
             CamParams['intrinsicMat'][1,2] = ly-py
             
     return CamParams
-
-# %% 
+        
+# %%
 def calcExtrinsics(imageFileName, CameraParams, CheckerBoardParams,
                    imageScaleFactor=1,visualize=False,
                    imageUpsampleFactor=1,useSecondExtrinsicsSolution=False):
@@ -362,6 +362,7 @@ def calcExtrinsics(imageFileName, CameraParams, CheckerBoardParams,
       
     # Vector for 2D points 
     twodpoints = [] 
+
     
     #  3D points real world coordinates. Assuming z=0
     objectp3d = generate3Dgrid(CheckerBoardParams)
@@ -417,7 +418,17 @@ def calcExtrinsics(imageFileName, CameraParams, CheckerBoardParams,
     ret, corners = cv2.findChessboardCorners( 
                 grayColor, CheckerBoardParams['dimensions'],  
                 cv2.CALIB_CB_ADAPTIVE_THRESH) 
+    
+    if ret == False:
 
+        with open("C:/Users/mattpetrucci/Documents/Data/cam2Points.csv") as file:
+            data = list(csv.reader(file,delimiter=','))
+        data[0] = ['326.7912191', '2576.435311']    
+        tempData = np.array(data, dtype = np.float32)
+        corners = np.reshape(tempData, (88,1,2))
+        
+        ret = True
+            
     # If desired number of corners can be detected then, 
     # refine the pixel coordinates and display 
     # them on the images of checker board 
@@ -451,9 +462,9 @@ def calcExtrinsics(imageFileName, CameraParams, CheckerBoardParams,
         #cv2.waitKey(0) 
   
         #cv2.destroyAllWindows()
-    if ret == False:
-        print('No checkerboard detected. Will skip cam in triangulation.')
-        return None
+    #if ret == False:
+    #    print('No checkerboard detected. Will skip cam in triangulation.')
+    #    return None
         
         
     # Find position and rotation of camera in board frame.

@@ -67,7 +67,7 @@ from utils import importMetadata
 #   C:/Users/opencap/Documents/LabValidation_withVideos/subject3
 #   ...
 #dataDir = 'C:/Users/mattpetrucci/Documents/LabValidation/'
-dataDir = 'G:\Shared drives\SFGiants\Data'
+dataDir = 'C:/Users/mattpetrucci/Documents/Data'
 
 # The dataset includes 2 sessions per subject.The first session includes
 # static, sit-to-stand, squat, and drop jump trials. The second session 
@@ -84,7 +84,7 @@ dataDir = 'G:\Shared drives\SFGiants\Data'
                 #'subject10_Session0', 'subject10_Session1', 
                 #'subject11_Session0', 'subject11_Session1']
 
-sessionNames = ['Pitcher01_Session0']
+sessionNames = ['Pitcher03_Session0']
 
 
 
@@ -93,11 +93,12 @@ poseDetectors = ['OpenPose']
 
 # Select the camera configuration you would like to use.
 # cameraSetups = ['2-cameras', '3-cameras', '5-cameras']
-cameraSetups = ['3-cameras']
+cameraSetups = ['2-cameras']
 
 # Select the resolution at which you would like to use OpenPose. More details
 # about the options in Examples/reprocessSessions. In the paper, we compared 
 # 'default' and '1x1008_4scales'.
+#resolutionPoseDetection = '1x736_2scales'
 resolutionPoseDetection = 'default'
 
 # Since the prepint release, we updated a new augmenter model. To use the model
@@ -110,10 +111,10 @@ augmenter_model = 'v0.2'
 # structure is the same one as the one expected by OpenCap. It is only done
 # once as long as the variable overwriteRestructuring is False. To overwrite
 # flip the flag to True.
-overwriteRestructuring = False
+overwriteRestructuring = True
 #subjects = ['subject' + str(i) for i in range(2,12)]
 #subjects = ['Pitcher' + str(i) for i in range(2,3)]
-subjects = ['Pitcher01']
+subjects = ['Pitcher03']
 for subject in subjects:
     pathSubject = os.path.join(dataDir, subject)
     pathVideos = os.path.join(pathSubject, 'VideoData')    
@@ -153,9 +154,9 @@ for subject in subjects:
                 os.makedirs(pathTrialNew, exist_ok=True)
                 shutil.copy2(pathVideo, pathTrialNew)
             # Copy camera parameters
-            pathParameters = os.path.join(pathCam, 
-                                          'cameraIntrinsicsExtrinsics.pickle')
-            shutil.copy2(pathParameters, pathCamNew)
+            #pathParameters = os.path.join(pathCam, 
+            #                              'cameraIntrinsicsExtrinsics.pickle')
+            #shutil.copy2(pathParameters, pathCamNew)
 
 # %% Fixed settings.
 # The dataset contains 5 videos per trial. The 5 videos are taken from cameras
@@ -164,7 +165,7 @@ for subject in subjects:
 # cameraSetup, we load different videos.
 cam2sUse = {'5-cameras': ['Cam0', 'Cam1', 'Cam2', 'Cam3', 'Cam4'], 
             '3-cameras': ['Cam0', 'Cam1', 'Cam2'], 
-            '2-cameras': ['Cam1', 'Cam3']}
+            '2-cameras': ['Cam0', 'Cam1']}
 
 # # %% Functions for re-processing the data.
 def process_trial(trial_name=None, session_name=None, isDocker=False,

@@ -50,7 +50,7 @@ def main(sessionName, trialName, trial_id, camerasToUse=['all'],
     # Marker augmentation.
     runMarkerAugmentation = True
     # OpenSim pipeline.
-    runOpenSimPipeline = True
+    runOpenSimPipeline = False
     # Lowpass filter frequency of 2D keypoints for gait and everything else.
     filtFreqs = {'gait':12, 'default':500} # defaults to framerate/2
     # High-resolution for OpenPose.
