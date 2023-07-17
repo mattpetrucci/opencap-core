@@ -52,7 +52,7 @@ def main(sessionName, trialName, trial_id, camerasToUse=['all'],
     # OpenSim pipeline.
     runOpenSimPipeline = False
     # Lowpass filter frequency of 2D keypoints for gait and everything else.
-    filtFreqs = {'gait':12, 'default':500} # defaults to framerate/2
+    filtFreqs = {'gait':12, 'default':20} # defaults to framerate/2
     # High-resolution for OpenPose.
     resolutionPoseDetection = resolutionPoseDetection
     # Set to False to only generate the json files (default is True).
@@ -247,7 +247,9 @@ def main(sessionName, trialName, trial_id, camerasToUse=['all'],
         elif checkerBoardMount == 'ground_jumps': # for sub1
             rotationAngles = {'x':90, 'y':180}
         elif checkerBoardMount == 'ground_gaits': # for sub1
-            rotationAngles = {'x':90, 'y':90}        
+            rotationAngles = {'x':90, 'y':90}  
+        elif checkerBoardMount == 'SFG_Mound': # for sub1
+            rotationAngles = {'y':-135} 
         else:
             raise Exception('checkerBoard placement value in\
              sessionMetadata.yaml is not currently supported')

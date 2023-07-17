@@ -423,7 +423,7 @@ def calcExtrinsics(imageFileName, CameraParams, CheckerBoardParams,
 
         with open("C:/Users/mattpetrucci/Documents/Data/cam2Points.csv") as file:
             data = list(csv.reader(file,delimiter=','))
-        data[0] = ['326.7912191', '2576.435311']    
+       # data[0] = ['326.7912191', '2576.435311']    
         tempData = np.array(data, dtype = np.float32)
         corners = np.reshape(tempData, (88,1,2))
         
@@ -463,8 +463,8 @@ def calcExtrinsics(imageFileName, CameraParams, CheckerBoardParams,
   
         #cv2.destroyAllWindows()
     #if ret == False:
-    #    print('No checkerboard detected. Will skip cam in triangulation.')
-    #    return None
+     #   print('No checkerboard detected. Will skip cam in triangulation.')
+      #  return None
         
         
     # Find position and rotation of camera in board frame.

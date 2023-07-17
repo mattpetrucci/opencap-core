@@ -84,12 +84,13 @@ dataDir = 'C:/Users/mattpetrucci/Documents/Data'
                 #'subject10_Session0', 'subject10_Session1', 
                 #'subject11_Session0', 'subject11_Session1']
 
-sessionNames = ['Pitcher03_Session0']
+sessionNames = ['Pitcher01_Session0']
 
 
 
 # We only support OpenPose on Windows.
-poseDetectors = ['OpenPose']
+# poseDetectors = ['OpenPose']
+poseDetectors = ['mmpose']
 
 # Select the camera configuration you would like to use.
 # cameraSetups = ['2-cameras', '3-cameras', '5-cameras']
@@ -111,48 +112,48 @@ augmenter_model = 'v0.2'
 # structure is the same one as the one expected by OpenCap. It is only done
 # once as long as the variable overwriteRestructuring is False. To overwrite
 # flip the flag to True.
-overwriteRestructuring = True
+#overwriteRestructuring = True
 #subjects = ['subject' + str(i) for i in range(2,12)]
 #subjects = ['Pitcher' + str(i) for i in range(2,3)]
-subjects = ['Pitcher03']
-for subject in subjects:
-    pathSubject = os.path.join(dataDir, subject)
-    pathVideos = os.path.join(pathSubject, 'VideoData')    
-    for session in os.listdir(pathVideos):
-        if 'Session' not in session:
-            continue
-        pathSession = os.path.join(pathVideos, session)
-        pathSessionNew = os.path.join(dataDir, 'Data', subject + '_' + session)
-        if os.path.exists(pathSessionNew) and not overwriteRestructuring:
-            continue
-        os.makedirs(pathSessionNew, exist_ok=True)
-        # Copy metadata
-        pathMetadata = os.path.join(pathSubject, 'sessionMetadata.yaml')
-        #pathMetadata = os.path.join(pathSubject, 'metadata.yaml')
-        shutil.copy2(pathMetadata, pathSessionNew)
-        pathMetadataNew = os.path.join(pathSessionNew, 'sessionMetadata.yaml')
-        #pathMetadataNew = os.path.join(pathSessionNew, 'metadata.yaml')
-        # Adjust model name
-        sessionMetadata = importMetadata(pathMetadataNew)
-        sessionMetadata['openSimModel'] = (
-            'LaiArnoldModified2017_poly_withArms_weldHand')
-        with open(pathMetadataNew, 'w') as file:
-                yaml.dump(sessionMetadata, file)        
-        for cam in os.listdir(pathSession):
-            if "Cam" not in cam:
-                continue            
-            pathCam = os.path.join(pathSession, cam)
-            pathCamNew = os.path.join(pathSessionNew, 'Videos', cam)
-            pathInputMediaNew = os.path.join(pathCamNew, 'InputMedia')
-            # Copy videos.
-            for trial in os.listdir(pathCam):
-                pathTrial = os.path.join(pathCam, trial)
-                if not os.path.isdir(pathTrial):
-                    continue
-                pathVideo = os.path.join(pathTrial, trial + '.avi')
-                pathTrialNew = os.path.join(pathInputMediaNew, trial)
-                os.makedirs(pathTrialNew, exist_ok=True)
-                shutil.copy2(pathVideo, pathTrialNew)
+# subjects = ['Pitcher01']
+# for subject in subjects:
+#     pathSubject = os.path.join(dataDir, subject)
+#     pathVideos = os.path.join(pathSubject, 'VideoData')    
+#     for session in os.listdir(pathVideos):
+#         if 'Session' not in session:
+#             continue
+#         pathSession = os.path.join(pathVideos, session)
+#         pathSessionNew = os.path.join(dataDir, 'Data', subject + '_' + session)
+#         if os.path.exists(pathSessionNew) and not overwriteRestructuring:
+#             continue
+#         os.makedirs(pathSessionNew, exist_ok=True)
+#         # Copy metadata
+#         pathMetadata = os.path.join(pathSubject, 'sessionMetadata.yaml')
+#         #pathMetadata = os.path.join(pathSubject, 'metadata.yaml')
+#         shutil.copy2(pathMetadata, pathSessionNew)
+#         pathMetadataNew = os.path.join(pathSessionNew, 'sessionMetadata.yaml')
+#         #pathMetadataNew = os.path.join(pathSessionNew, 'metadata.yaml')
+#         # Adjust model name
+#         sessionMetadata = importMetadata(pathMetadataNew)
+#         sessionMetadata['openSimModel'] = (
+#             'LaiArnoldModified2017_poly_withArms_weldHand')
+#         with open(pathMetadataNew, 'w') as file:
+#                 yaml.dump(sessionMetadata, file)        
+#         for cam in os.listdir(pathSession):
+#             if "Cam" not in cam:
+#                 continue            
+#             pathCam = os.path.join(pathSession, cam)
+#             pathCamNew = os.path.join(pathSessionNew, 'Videos', cam)
+#             pathInputMediaNew = os.path.join(pathCamNew, 'InputMedia')
+#             # Copy videos.
+#             for trial in os.listdir(pathCam):
+#                 pathTrial = os.path.join(pathCam, trial)
+#                 if not os.path.isdir(pathTrial):
+#                     continue
+#                 pathVideo = os.path.join(pathTrial, trial + '.avi')
+#                 pathTrialNew = os.path.join(pathInputMediaNew, trial)
+#                 os.makedirs(pathTrialNew, exist_ok=True)
+#                 shutil.copy2(pathVideo, pathTrialNew)
             # Copy camera parameters
             #pathParameters = os.path.join(pathCam, 
             #                              'cameraIntrinsicsExtrinsics.pickle')
@@ -165,7 +166,7 @@ for subject in subjects:
 # cameraSetup, we load different videos.
 cam2sUse = {'5-cameras': ['Cam0', 'Cam1', 'Cam2', 'Cam3', 'Cam4'], 
             '3-cameras': ['Cam0', 'Cam1', 'Cam2'], 
-            '2-cameras': ['Cam0', 'Cam1']}
+            '2-cameras': ['Cam0', 'Cam2']}
 
 # # %% Functions for re-processing the data.
 def process_trial(trial_name=None, session_name=None, isDocker=False,

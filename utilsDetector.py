@@ -93,10 +93,10 @@ def runOpenPoseVideo(cameraDirectory,fileName,pathOpenPose, trialName,
     fileName = trialPath + "_rotated.avi"
     pathVideoRot = os.path.normpath(os.path.join(cameraDirectory, fileName))
     cmd_fr = ' '
-    # frameRate = np.round(thisVideo.get(cv2.CAP_PROP_FPS))
-    # if frameRate > 60.0: # previously downsampled for efficiency
-    #     cmd_fr = ' -r 60 '
-    #     frameRate = 60.0  
+     #frameRate = np.round(thisVideo.get(cv2.CAP_PROP_FPS))
+    frameRate = 400
+    if frameRate > 60.0: # previously downsampled for efficiency
+        cmd_fr = ' -r {} '.format(frameRate)
     CMD = "ffmpeg -loglevel error -y -i {}{}-q 0 {}".format(
         videoFullPath, cmd_fr, pathVideoRot)
         
