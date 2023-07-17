@@ -11,6 +11,7 @@ import glob
 import mimetypes
 import subprocess
 import zipfile
+import time
 
 import numpy as np
 import pandas as pd
@@ -115,6 +116,11 @@ def getSessionJson(session_id):
     sessionJson['trials'].sort(key=getCreatedAt)
     
     return sessionJson
+
+def getSubjectJson(subject_id):
+    subjectJson = requests.get(API_URL + "subjects/{}/".format(subject_id),
+                       headers = {"Authorization": "Token {}".format(API_TOKEN)}).json()
+    return subjectJson
     
 def getTrialName(trial_id):
     trial = getTrialJson(trial_id)
@@ -146,24 +152,9 @@ def writeMediaToAPI(API_URL,media_path,trial_id,tag=None,deleteOldMedia=False):
                 
                 else:
                     device_id = None
-                
-                files = {'media': open(fullpath, 'rb')}
-                data = {
-                    "trial": trial_id,
-                    "tag": tag,
-                    "device_id" : device_id
-                }
-        
-                r= requests.post("{}{}".format(API_URL, "results/"), files=files, data=data,
-                         headers = {"Authorization": "Token {}".format(API_TOKEN)})
-                files["media"].close()
-                
-                if r.status_code != 201:
-                    print('server response was + ' + str(r.status_code))
-                else:
-                    print('Media results sent to API')
-            
-        
+                               
+                postFileToTrial(fullpath,trial_id,tag,device_id)
+
     return
 
 
@@ -373,13 +364,47 @@ def getMetadataFromServer(session_id,justCheckerParams=False):
     session = getSessionJson(session_id)
     if session['meta'] is not None:
         if not justCheckerParams:
-            session_desc["subjectID"] = session['meta']['subject']['id']
-            session_desc["mass_kg"] = float(session['meta']['subject']['mass'])
-            session_desc["height_m"] = float(session['meta']['subject']['height'])
-            try:
-                session_desc["posemodel"] = session['meta']['subject']['posemodel']
-            except:
-                session_desc["posemodel"] = 'openpose'
+            # Backward compatibility
+            if 'subject' in session['meta']:
+                session_desc["subjectID"] = session['meta']['subject']['id']
+                session_desc["mass_kg"] = float(session['meta']['subject']['mass'])
+                session_desc["height_m"] = float(session['meta']['subject']['height'])
+                # Before implementing the subject feature, the posemodel was stored
+                # in session['meta']['subject']. After implementing the subject
+                # feature, the posemodel is stored in session['meta']['settings']
+                # and there is no session['meta']['subject'].
+                try:
+                    session_desc["posemodel"] = session['meta']['subject']['posemodel']
+                except:
+                    session_desc["posemodel"] = 'openpose'
+                # This might happen if openSimModel/augmentermodel was changed post data collection.
+                if 'settings' in session['meta']:
+                    try:
+                        session_desc["openSimModel"] = session['meta']['settings']['openSimModel']
+                    except:
+                        session_desc["openSimModel"] = 'LaiUhlrich2022'
+                    try:
+                        session_desc["augmentermodel"] = session['meta']['settings']['augmentermodel']
+                    except:
+                        session_desc["augmentermodel"] = 'v0.2'
+            else:                
+                subject_info = getSubjectJson(session['subject'])                
+                session_desc["subjectID"] = subject_info['name']
+                session_desc["mass_kg"] = subject_info['weight']
+                session_desc["height_m"] = subject_info['height']
+                try:
+                    session_desc["posemodel"] = session['meta']['settings']['posemodel']
+                except:
+                    session_desc["posemodel"] = 'openpose'
+                try:
+                    session_desc["openSimModel"] = session['meta']['settings']['openSimModel']
+                except:
+                    session_desc["openSimModel"] = 'LaiUhlrich2022'
+                try:
+                    session_desc["augmentermodel"] = session['meta']['settings']['augmentermodel']
+                except:
+                    session_desc["augmentermodel"] = 'v0.2'
+
         if 'sessionWithCalibration' in session['meta'] and 'checkerboard' not in session['meta']:
             newSessionId = session['meta']['sessionWithCalibration']['id']
             session = getSessionJson(newSessionId)
@@ -571,17 +596,45 @@ def changeSessionMetadata(session_ids,newMetaDict):
         session = getSessionJson(session_id)
         existingMeta = session['meta']
         
+        # change metadata
+        # Hack: wrong mapping between metadata and yaml
+        # mass in metadata is mass_kg in yaml
+        # height in metadata is height_m in yaml
+        mapping_metadata = {'mass': 'mass_kg',
+                            'height': 'height_m'}
+        addedKey= {}
         for key in existingMeta.keys():
-            if key in newMetaDict.keys():
-                existingMeta[key] = newMetaDict[key]
+            if key in mapping_metadata:
+                key_t = mapping_metadata[key]
+            else:
+                key_t = key
+            if key_t in newMetaDict.keys():
+                existingMeta[key] = newMetaDict[key_t]
+                addedKey[key_t] = newMetaDict[key_t]
             if type(existingMeta[key]) is dict:
-                for key2 in existingMeta[key].keys():
-                    if key2 in newMetaDict.keys():
-                        existingMeta[key][key2] = newMetaDict[key2]
+                for key2 in existingMeta[key].keys():                    
+                    if key2 in mapping_metadata:
+                        key_t = mapping_metadata[key2]
+                    else:
+                        key_t = key2                     
+                    if key_t in newMetaDict.keys():
+                        existingMeta[key][key2] = newMetaDict[key_t]
+                        addedKey[key_t] = newMetaDict[key_t]
+                        
+        # add metadata if not existing (eg, specifying OpenSim model)
+        # only entries in settings_fields below are supported.
+        for newMeta in newMetaDict:
+            if not newMeta in addedKey:
+                print("Could not find {} in existing metadata, trying to add it.".format(newMeta))
+                settings_fields = ['framerate', 'posemodel', 'openSimModel', 'augmentermodel']
+                if newMeta in settings_fields:
+                    existingMeta['settings'][newMeta] = newMetaDict[newMeta]
+                    addedKey[newMeta] = newMetaDict[newMeta]
+                    print("Added {} to settings in metadata".format(newMetaDict[newMeta]))
+                else:
+                    print("Could not add {} to the metadata; not recognized".format(newMetaDict[newMeta]))
         
-        data = {
-                "meta":json.dumps(existingMeta)
-            }
+        data = {"meta":json.dumps(existingMeta)}
         
         r= requests.patch(session_url, data=data,
               headers = {"Authorization": "Token {}".format(API_TOKEN)})
@@ -600,13 +653,21 @@ def changeSessionMetadata(session_ids,newMetaDict):
         
         metaYaml = importMetadata(metaPath)
         
+        addedKey= {}
         for key in metaYaml.keys():
             if key in newMetaDict.keys():
                 metaYaml[key] = newMetaDict[key]
+                addedKey[key] = newMetaDict[key]
             if type(metaYaml[key]) is dict:
                 for key2 in metaYaml[key].keys():
                     if key2 in newMetaDict.keys():
                         metaYaml[key][key2] = newMetaDict[key2] 
+                        addedKey[key2] = newMetaDict[key2]
+                        
+        for newMeta in newMetaDict:
+            if not newMeta in addedKey:
+               print("Could not find {} in existing yaml, adding it.".format(newMeta))               
+               metaYaml[newMeta] = newMetaDict[newMeta]
                         
         with open(metaPath, 'w') as file:
             yaml.dump(metaYaml, file)
@@ -732,16 +793,31 @@ def getModelAndMetadata(session_id,session_path,simplePath=False):
     return
     
 def postFileToTrial(filePath,trial_id,tag,device_id):
-    files = {'media': open(filePath, 'rb')}
+        
+    # get S3 link
+    data = {'fileName':os.path.split(filePath)[1]}
+    r = requests.get(API_URL + "sessions/null/get_presigned_url/",data=data).json()
+    
+    # upload to S3
+    files = {'file': open(filePath, 'rb')}
+    requests.post(r['url'], data=r['fields'],files=files)   
+    files["file"].close()
+
+    # post link to and data to results   
     data = {
         "trial": trial_id,
         "tag": tag,
-        "device_id" : device_id
+        "device_id" : device_id,
+        "media_url" : r['fields']['key']
     }
-
-    requests.post(API_URL + "results/", files=files, data=data,
+    
+    rResult = requests.post(API_URL + "results/", data=data,
                   headers = {"Authorization": "Token {}".format(API_TOKEN)})
-    files["media"].close()
+    
+    if rResult.status_code != 201:
+        print('server response was + ' + str(r.status_code))
+    else:
+        print('Result posted to S3.')
     
     return
 
@@ -1151,6 +1227,29 @@ def getOpenPoseMarkers_lowerExtremity():
 
     return feature_markers, response_markers
 
+# Different order of markers compared to getOpenPoseMarkers_lowerExtremity 
+def getOpenPoseMarkers_lowerExtremity2():
+
+    feature_markers = [
+        "Neck", "RShoulder", "LShoulder", "RHip", "LHip", "RKnee", "LKnee",
+        "RAnkle", "LAnkle", "RHeel", "LHeel", "RSmallToe", "LSmallToe",
+        "RBigToe", "LBigToe"]
+
+    response_markers = [
+        'r.ASIS_study', 'L.ASIS_study', 'r.PSIS_study',
+        'L.PSIS_study', 'r_knee_study', 'r_mknee_study', 
+        'r_ankle_study', 'r_mankle_study', 'r_toe_study', 
+        'r_5meta_study', 'r_calc_study', 'L_knee_study', 
+        'L_mknee_study', 'L_ankle_study', 'L_mankle_study',
+        'L_toe_study', 'L_calc_study', 'L_5meta_study', 
+        'r_shoulder_study', 'L_shoulder_study', 'C7_study', 
+        'r_thigh1_study', 'r_thigh2_study', 'r_thigh3_study',
+        'L_thigh1_study', 'L_thigh2_study', 'L_thigh3_study',
+        'r_sh1_study', 'r_sh2_study', 'r_sh3_study', 'L_sh1_study',
+        'L_sh2_study', 'L_sh3_study', 'RHJC_study', 'LHJC_study']
+
+    return feature_markers, response_markers
+
 def getMMposeMarkers_lowerExtremity():
 
     # Here we replace RSmallToe_mmpose and LSmallToe_mmpose by RSmallToe and
@@ -1198,6 +1297,19 @@ def getMarkers_upperExtremity_noPelvis():
 
     return feature_markers, response_markers
 
+# Different order of markers compared to getMarkers_upperExtremity_noPelvis.
+def getMarkers_upperExtremity_noPelvis2():
+
+    feature_markers = [
+        "Neck", "RShoulder", "LShoulder", "RElbow", "LElbow", "RWrist",
+        "LWrist"]
+
+    response_markers = ["r_lelbow_study", "r_melbow_study", "r_lwrist_study",
+                        "r_mwrist_study", "L_lelbow_study", "L_melbow_study",
+                        "L_lwrist_study", "L_mwrist_study"]
+
+    return feature_markers, response_markers
+
 def delete_multiple_element(list_object, indices):
     indices = sorted(indices, reverse=True)
     for idx in indices:
@@ -1213,3 +1325,112 @@ def getVideoExtension(pathFileWithoutExtension):
             extension = '.' + file.rsplit('.', 1)[1]
             
     return extension
+
+# check how much time has passed since last status check
+def checkTime(t,minutesElapsed=30):
+    t2 = time.localtime()
+    return (t2.tm_hour - t.tm_hour) * 60 + (t2.tm_min - t.tm_min) >= minutesElapsed
+
+# send status email
+def sendStatusEmail(message=None,subject=None):
+    import smtplib, ssl
+    from utilsAPI import getStatusEmails
+    from email.message import EmailMessage
+    
+    emailInfo = getStatusEmails()
+    if emailInfo is None:
+        return('No email info or wrong email info in env file.')
+       
+    if message is None:
+        message = "A backend server is down and has been stopped."
+    if subject is None:
+        subject = "OpenCap backend server down"
+        
+    port = 465  # For SSL
+    smtp_server = "smtp.gmail.com"  
+    context = ssl.create_default_context()
+    with smtplib.SMTP_SSL(smtp_server, port, context=context) as server:
+        server.login(emailInfo['fromEmail'], emailInfo['password'])
+        for toEmail in emailInfo['toEmails']:
+            # server.(emailInfo['fromEmail'], toEmail, message)
+            msg = EmailMessage()
+            msg['Subject'] = subject
+            msg['From'] = emailInfo['fromEmail']
+            msg['To'] = toEmail
+            msg.set_content(message)
+            server.send_message(msg)
+        server.quit()
+
+def checkResourceUsage():
+    import psutil
+    
+    resourceUsage = {}
+    
+    memory_info = psutil.virtual_memory()
+    resourceUsage['memory_gb'] = memory_info.used / (1024 ** 3)
+    resourceUsage['memory_perc'] = memory_info.percent 
+
+    # Get the disk usage information of the root directory
+    disk_usage = psutil.disk_usage('/')
+
+    # Get the percentage of disk usage
+    resourceUsage['disk_gb'] = disk_usage.used / (1024 ** 3)
+    resourceUsage['disk_perc'] = disk_usage.percent
+    
+    return resourceUsage
+
+# %% Some functions for loading subject data
+
+def getSubjectNumber(subjectName):
+    subjects = requests.get(API_URL + "subjects/",
+                           headers = {"Authorization": "Token {}".format(API_TOKEN)}).json()
+    sNum = [s['id'] for s in subjects if s['name'] == subjectName]
+    if len(sNum)>1:
+        print(len(sNum) + ' subjects with the name ' + subjectName + '. Will use the first one.')   
+    elif len(sNum) == 0:
+        raise Exception('no subject found with this name.')
+        
+    return sNum[0]
+
+def getUserSessions():
+    sessionJson = requests.get(API_URL + "sessions/valid/",
+                           headers = {"Authorization": "Token {}".format(API_TOKEN)}).json()
+    return sessionJson
+
+def getSubjectSessions(subjectName):
+    sessions = getUserSessions()
+    subNum = getSubjectNumber(subjectName)
+    sessions2 = [s for s in sessions if (s['subject'] == subNum)]
+    
+    return sessions2
+
+def getTrialNames(session):
+    trialNames = [t['name'] for t in session['trials']]
+    return trialNames
+
+def findSessionWithTrials(subjectTrialNames,trialNames):
+    hasTrials = []
+    for trials in trialNames:
+        hasTrials.append(None)
+        for i,sTrials in enumerate(subjectTrialNames):
+            if all(elem in sTrials for elem in trials):
+                hasTrials[-1] = i
+                break
+            
+    return hasTrials
+
+def get_entry_with_largest_number(trialList):
+    max_entry = None
+    max_number = float('-inf')
+
+    for entry in trialList:
+        # Extract the number from the string
+        try:
+            number = int(entry.split('_')[-1])
+            if number > max_number:
+                max_number = number
+                max_entry = entry
+        except ValueError:
+            continue
+
+    return max_entry
