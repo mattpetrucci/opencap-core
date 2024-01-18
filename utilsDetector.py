@@ -347,6 +347,19 @@ def runMMposeVideo(
         # Post-process data to have OpenPose-like file structure.        
         arrangeMMposePkl(pklPath, ppPklPath)
 
+    # This is a hack to be able to use pose pickle files already saved in the
+    # database. In some cases, we saved pklPath instead of ppPklPath:
+    # https://github.com/stanfordnmbl/opencap-core/pull/100/files.
+    # We here identify these cases and re-run post processing. 
+    else:
+        open_file = open(ppPklPath, "rb")
+        frames = pickle.load(open_file)
+        open_file.close()
+        isData = any([('pose_keypoints_2d' in element[0].keys()) for element in frames if len(element)>0])
+        if not isData:
+            os.rename(ppPklPath, pklPath)
+            arrangeMMposePkl(pklPath, ppPklPath)
+
 # %%
 def arrangeMMposePkl(poseInferencePklPath, outputPklPath):
     

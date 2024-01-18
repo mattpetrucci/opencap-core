@@ -34,7 +34,7 @@ def main(sessionName, trialName, trial_id, camerasToUse=['all'],
          calibrationOptions=None,
          markerDataFolderNameSuffix=None, imageUpsampleFactor=4,
          poseDetector='OpenPose', resolutionPoseDetection='default', 
-         scaleModel=False, bbox_thr=0.8, augmenter_model='v0.2',
+         scaleModel=False, bbox_thr=0.8, augmenter_model='v0.3',
          genericFolderNames=False, offset=True, benchmark=False,
          dataDir=None, overwriteAugmenterModel=False):
 
@@ -58,6 +58,16 @@ def main(sessionName, trialName, trial_id, camerasToUse=['all'],
     # Set to False to only generate the json files (default is True).
     # This speeds things up and saves storage space.
     generateVideo = True
+    # This is a hack to handle a mismatch between the use of mmpose and hrnet,
+    # and between the use of OpenPose and openpose.
+    if poseDetector == 'hrnet':
+        poseDetector = 'mmpose'        
+    elif poseDetector == 'openpose':
+        poseDetector = 'OpenPose'
+    if poseDetector == 'mmpose':
+        outputMediaFolder = 'OutputMedia_mmpose' + str(bbox_thr)
+    elif poseDetector == 'OpenPose':
+        outputMediaFolder = 'OutputMedia_' + resolutionPoseDetection
     
     # %% Special case: extrinsics trial.
     # For that trial, we only calibrate the cameras.
@@ -79,13 +89,7 @@ def main(sessionName, trialName, trial_id, camerasToUse=['all'],
         sessionDir = os.path.join(dataDir, 'Data', sessionName)
     sessionMetadata = importMetadata(os.path.join(sessionDir,
                                                   'sessionMetadata.yaml'))
-    # If pose model defined through web app.
-    if 'posemodel' in sessionMetadata:
-        if sessionMetadata['posemodel'] == 'hrnet':
-            poseDetector = 'mmpose'
-        else:
-            poseDetector = 'OpenPose'
-
+    
     # If augmenter model defined through web app.
     # If overwriteAugmenterModel is True, the augmenter model is the one
     # passed as an argument to main(). This is useful for local testing.
@@ -99,6 +103,51 @@ def main(sessionName, trialName, trial_id, camerasToUse=['all'],
         poseDetectorDirectory = getOpenPoseDirectory(isDocker)
     elif poseDetector == 'mmpose':
         poseDetectorDirectory = getMMposeDirectory(isDocker)    
+        
+    # %% Create marker folders
+    # Create output folder.
+    if genericFolderNames:
+        markerDataFolderName = os.path.join('MarkerData') 
+    else:
+        if poseDetector == 'mmpose':
+            suff_pd = '_' + str(bbox_thr)
+        elif poseDetector == 'OpenPose':
+            suff_pd = '_' + resolutionPoseDetection
+                
+        markerDataFolderName = os.path.join('MarkerData', 
+                                            poseDetector + suff_pd) 
+        if not markerDataFolderNameSuffix is None:
+            markerDataFolderName = os.path.join(markerDataFolderName,
+                                                markerDataFolderNameSuffix)
+    preAugmentationDir = os.path.join(sessionDir, markerDataFolderName,
+                                      'PreAugmentation')
+    os.makedirs(preAugmentationDir, exist_ok=True)
+    
+    # Create augmented marker folders as well
+    if genericFolderNames:
+        postAugmentationDir = os.path.join(sessionDir, markerDataFolderName, 
+                                           'PostAugmentation')
+    else:
+        postAugmentationDir = os.path.join(
+            sessionDir, markerDataFolderName, 
+            'PostAugmentation_{}'.format(augmenterModel))
+    os.makedirs(postAugmentationDir, exist_ok=True)
+        
+    # %% Dump settings in yaml.
+    if not extrinsicsTrial:
+        pathSettings = os.path.join(postAugmentationDir,
+                                    'Settings_' + trial_id + '.yaml')
+        settings = {
+            'poseDetector': poseDetector, 
+            'augmenter_model': augmenterModel, 
+            'imageUpsampleFactor': imageUpsampleFactor,
+            'openSimModel': sessionMetadata['openSimModel']}
+        if poseDetector == 'OpenPose':
+            settings['resolutionPoseDetection'] = resolutionPoseDetection
+        elif poseDetector == 'mmpose':
+            settings['bbox_thr'] = bbox_thr
+        with open(pathSettings, 'w') as file:
+            yaml.dump(settings, file)
 
     # %% Camera calibration.
     if runCameraCalibration:    
@@ -205,23 +254,6 @@ def main(sessionName, trialName, trial_id, camerasToUse=['all'],
                     CamParamDict[camName])
             
     # %% 3D reconstruction
-    # Create output folder.
-    if genericFolderNames:
-        markerDataFolderName = os.path.join('MarkerData') 
-    else:
-        if poseDetector == 'mmpose':
-            suff_pd = '_' + str(bbox_thr)
-        elif poseDetector == 'OpenPose':
-            suff_pd = '_' + resolutionPoseDetection
-                
-        markerDataFolderName = os.path.join('MarkerData', 
-                                            poseDetector + suff_pd) 
-        if not markerDataFolderNameSuffix is None:
-            markerDataFolderName = os.path.join(markerDataFolderName,
-                                                markerDataFolderNameSuffix)
-    preAugmentationDir = os.path.join(sessionDir, markerDataFolderName,
-                                      'PreAugmentation')
-    os.makedirs(preAugmentationDir, exist_ok=True)
     
     # Set output file name.
     pathOutputFiles = {}
@@ -314,7 +346,8 @@ def main(sessionName, trialName, trial_id, camerasToUse=['all'],
                 cams2Use=cameras2Use, confidenceDict=confidence,
                 spline3dZeros = True, splineMaxFrames=int(frameRate/5), 
                 nansInOut=nansInOut,CameraDirectories=cameraDirectories,
-                trialName=trialName,startEndFrames=startEndFrames,trialID=trial_id)
+                trialName=trialName,startEndFrames=startEndFrames,trialID=trial_id,
+                outputMediaFolder=outputMediaFolder)
         except Exception as e:
             if len(e.args) == 2: # specific exception
                 raise Exception(e.args[0], e.args[1])
@@ -322,10 +355,10 @@ def main(sessionName, trialName, trial_id, camerasToUse=['all'],
                 exception = "Triangulation failed. Verify your setup and try again. Visit https://www.opencap.ai/best-pratices to learn more about data collection and https://www.opencap.ai/troubleshooting for potential causes for a failed trial."
                 raise Exception(exception, traceback.format_exc())
         
-        # Return 0s if not enough data.
+        # Throw an error if not enough data
         if keypoints3D.shape[2] < 10:
-            keypoints3D = np.zeros((3,25,10))
-            confidence3D = np.zeros((1,25,10)) 
+            e1 = 'Error - less than 10 good frames of triangulated data.'
+            raise Exception(e1,e1)
     
         # Write TRC.
         writeTRCfrom3DKeypoints(keypoints3D, pathOutputFiles[trialName],
@@ -333,14 +366,6 @@ def main(sessionName, trialName, trial_id, camerasToUse=['all'],
                                 rotationAngles=rotationAngles)
     
     # %% Augmentation.
-    # Create output folder.    
-    if genericFolderNames:
-        postAugmentationDir = os.path.join(sessionDir, markerDataFolderName, 
-                                           'PostAugmentation')
-    else:
-        postAugmentationDir = os.path.join(
-            sessionDir, markerDataFolderName, 
-            'PostAugmentation_{}'.format(augmenterModel))
     
     # Get augmenter model.
     augmenterModelName = (
@@ -378,7 +403,8 @@ def main(sessionName, trialName, trial_id, camerasToUse=['all'],
         if offset:
             # If offset, no need to offset again for the webapp visualization.
             # (0.01 so that there is no overall offset, see utilsOpenSim).
-            vertical_offset = 0.01            
+            vertical_offset_settings = float(np.copy(vertical_offset)-0.01)
+            vertical_offset = 0.01   
         
     # %% OpenSim pipeline.
     if runOpenSimPipeline:
@@ -485,18 +511,8 @@ def main(sessionName, trialName, trial_id, camerasToUse=['all'],
                                outputJsonVisPath, 
                                vertical_offset=vertical_offset)  
         
-    # %% Dump settings in yaml.
-    if not extrinsicsTrial:
-        pathSettings = os.path.join(postAugmentationDir, 
-                                    'Settings_' + trial_id + '.yaml')
-        settings = {
-            'poseDetector': poseDetector, 
-            'resolutionPoseDetection': resolutionPoseDetection,
-            'augmenter_model': augmenterModel, 
-            'offset': offset, 
-            'imageUpsampleFactor': imageUpsampleFactor,
-            'openSimModel': sessionMetadata['openSimModel']}
-        if poseDetector == 'mmpose':
-            settings['bbox_thr']: str(bbox_thr)
+    # %% Rewrite settings, adding offset  
+    if not extrinsicsTrial and offset:
+        settings['verticalOffset'] = vertical_offset_settings 
         with open(pathSettings, 'w') as file:
             yaml.dump(settings, file)
