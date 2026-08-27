@@ -208,6 +208,7 @@ def computeAverageIntrinsics(session_path,trialIDs,CheckerBoardParams,nImages=25
             trial_name = trial['name']
         else:
             camModels.append(cameraModel)
+            trial_name = trial_id
         if trial_name == 'null':
             trial_name = trial_id
         
