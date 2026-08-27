@@ -196,7 +196,7 @@ def calcIntrinsics(folderName, CheckerBoardParams=None, filenames=['*.jpg'],
 def computeAverageIntrinsics(session_path,trialIDs,CheckerBoardParams,nImages=25,cameraModel= None,videoType=".mov"):
     CamParamList = []
     camModels = []
-    trial_name = ''
+    trial_name = 'null'
     
     for trial_id in trialIDs:
         if cameraModel is None:
